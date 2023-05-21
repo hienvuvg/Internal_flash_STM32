@@ -23,6 +23,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "examples_defines.h"
+#include <port.h>
+#include <stm32f4xx_hal.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,13 +44,25 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+/* Private variables ---------------------------------------------------------*/
 
-uint16_t VirtAddVarTab[NB_OF_VAR] = { 0x5555, 0x6666, 0x7777 };
-uint16_t VarDataTab[NB_OF_VAR] = { 0, 0, 0 };
-uint16_t VarValue, VarDataTmp = 0;
+SPI_HandleTypeDef *hcurrent_active_spi = &hspi1; //Is the current active SPI pointer - 1 or 2
+uint16_t pin_io_active_spi = DW_NSS_Pin; //CS IO for SPI. Default SPI1
+GPIO_PinState SPI_CS_state = GPIO_PIN_RESET; //Determine the CS for the IO
+//host_using_spi_e host_spi = SPI_1;
+
+uint8_t dw_check_response = 0;
+uint16_t current_tag_id = 0;
+uint16_t anchor_id = 0;
+extern uint16_t tag_timeout[N_TAGS];
+
+extern uint16_t t_ms, t_s;
+extern uint32_t t_us;
 
 /* USER CODE END PV */
 
@@ -54,7 +70,13 @@ uint16_t VarValue, VarDataTmp = 0;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
+/* Private function prototypes -----------------------------------------------*/
+
+extern example_ptr example_pointer;
+
+//extern int unit_test_main(void);
 
 /* USER CODE END PFP */
 
@@ -75,6 +97,10 @@ int _write(int file, char *ptr, int len) {
 int main(void) {
 	/* USER CODE BEGIN 1 */
 
+#ifndef NO_EXAMPLES
+	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+	build_examples();
+#endif
 	/* USER CODE END 1 */
 
 	/* MCU Configuration--------------------------------------------------------*/
@@ -96,151 +122,75 @@ int main(void) {
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
 	MX_USART2_UART_Init();
+	MX_SPI1_Init();
 	/* USER CODE BEGIN 2 */
-
-	/* Unlock the Flash Program Erase controller */
-	HAL_FLASH_Unlock();
-
-	/* Configure LED2 */
+	/* disable IRQ from DW3000*/
+	port_DisableEXT_IRQ();
 
 	printf("\nStarting...\n");
 
-	/* EEPROM Init */
+	HAL_FLASH_Unlock();
 	if (EE_Init() != EE_OK) {
-		Error_Handler();
+		printf("Flash initialization failed\n");
 	}
+	HAL_FLASH_Lock();
 
-//	/* --- Store successively many values of the three variables in the EEPROM ---*/
-//	printf("Store successively many values of the three variables in the EEPROM\n");
-//	/* Store 0x1000 values of Variable1 in EEPROM */
-//	for (VarValue = 1; VarValue <= 0x1000; VarValue++) {
-//		/* Sequence 1 */
-//		if ((EE_WriteVariable(VirtAddVarTab[0], VarValue)) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if ((EE_ReadVariable(VirtAddVarTab[0], &VarDataTab[0])) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (VarValue != VarDataTab[0]) {
-//			Error_Handler();
-//		}
-//
-//		/* Sequence 2 */
-//		if (EE_WriteVariable(VirtAddVarTab[1], ~VarValue) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (EE_ReadVariable(VirtAddVarTab[1], &VarDataTab[1]) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (((uint16_t) ~VarValue) != VarDataTab[1]) {
-//			Error_Handler();
-//		}
-//
-//		/* Sequence 3 */
-//		if (EE_WriteVariable(VirtAddVarTab[2], VarValue << 1) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (EE_ReadVariable(VirtAddVarTab[2], &VarDataTab[2]) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if ((VarValue << 1) != VarDataTab[2]) {
-//			Error_Handler();
-//		}
-//	}
-//
-//	/* Store 0x2000 values of Variable2 in EEPROM */
-//	printf("Store 0x2000 values of Variable2 in EEPROM \n");
-//	for (VarValue = 1; VarValue <= 0x2000; VarValue++) {
-//		if (EE_WriteVariable(VirtAddVarTab[1], VarValue) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (EE_ReadVariable(VirtAddVarTab[1], &VarDataTab[1]) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (VarValue != VarDataTab[1]) {
-//			Error_Handler();
-//		}
-//	}
-//
-//	/* read the last stored variables data*/
-//	if (EE_ReadVariable(VirtAddVarTab[0], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[0]) {
-//		Error_Handler();
-//	}
-//
-//	if (EE_ReadVariable(VirtAddVarTab[1], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[1]) {
-//		Error_Handler();
-//	}
-//
-//	if (EE_ReadVariable(VirtAddVarTab[2], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[2]) {
-//		Error_Handler();
-//	}
-//
-//	/* Store 0x3000 values of Variable3 in EEPROM */
-//	printf("Store 0x3000 values of Variable3 in EEPROM \n");
-//	for (VarValue = 1; VarValue <= 0x3000; VarValue++) {
-//		if (EE_WriteVariable(VirtAddVarTab[2], VarValue) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (EE_ReadVariable(VirtAddVarTab[2], &VarDataTab[2]) != HAL_OK) {
-//			Error_Handler();
-//		}
-//		if (VarValue != VarDataTab[2]) {
-//			Error_Handler();
-//		}
-//	}
-//
-//	/* read the last stored variables data*/
-//	printf("read the last stored variables data\n");
-//	if (EE_ReadVariable(VirtAddVarTab[0], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[0]) {
-//		Error_Handler();
-//	}
-//
-//	if (EE_ReadVariable(VirtAddVarTab[1], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[1]) {
-//		Error_Handler();
-//	}
-//
-//	if (EE_ReadVariable(VirtAddVarTab[2], &VarDataTmp) != HAL_OK) {
-//		Error_Handler();
-//	}
-//	if (VarDataTmp != VarDataTab[2]) {
-//		Error_Handler();
+	// Set anchor ID:
+	uint8_t set_id = 0;
+
+	anchor_id = ReadFlash(ADDR_ANCHOR_ID);
+	if (anchor_id == 0) {
+		printf("==> Please set ID\n");
+		if (set_id) {
+			uint16_t new_id = 3;
+			WriteFlash(ADDR_ANCHOR_ID, new_id);
+			anchor_id = ReadFlash(ADDR_ANCHOR_ID);
+			printf("New ID: %d\n", anchor_id);
+		}
+	}
+	printf("Anchor ID: %d\n", anchor_id);
+
+	// usleep calibration
+//	t_ms = 0;
+//	usleep(100000);
+//	printf("100,000 us = %d ms\n", t_ms);
+
+//	while(1){
+//		printf("1 2 3 8 8 8\n");
+//		HAL_Delay(500);
 //	}
 
+	/*
+	 * DW_RESET_Pin has been configured by CubeMx as Exti0 line
+	 * Reconfigure the line as Input
+	 */
+	setup_DWICRSTnIRQ(0);
 
+#ifndef NO_EXAMPLES
+	// Run the selected example as selected in example_selection.h
+	printf("Starting...\n");
+	example_pointer();
+	while(1){};
+#else
 
-	uint16_t addr = 0x7FFF; // Addr range: 0x0000 to 0x7FFF
-
-	WriteFlash(addr, 5467);
-	uint16_t data = ReadFlash(addr);
-
-	printf("Addr: 0x%x, Data: %d\n", addr, data);
+	cps_anchor_ds_twr_config(); // 348 Hz at 1 m
 
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
-		/* Turn LED2 On */
-//    BSP_LED_On(LED2);
+		cps_anchor_ds_twr_run(); // 348 Hz at 1 m
+//		tag_timeout[tag_id];
+//		int tag_id = cps_anchor_ds_twr_run();
+//		printf("Tag ID: %d\n", tag_id);
+//		HAL_Delay(1000);
+
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
 	}
+#endif
 	/* USER CODE END 3 */
 }
 
@@ -259,14 +209,13 @@ void SystemClock_Config(void) {
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
 	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+	RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
 	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-	RCC_OscInitStruct.PLL.PLLM = 16;
-	RCC_OscInitStruct.PLL.PLLN = 336;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	RCC_OscInitStruct.PLL.PLLM = 4;
+	RCC_OscInitStruct.PLL.PLLN = 100;
+	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
 	RCC_OscInitStruct.PLL.PLLQ = 4;
 	RCC_OscInitStruct.PLL.PLLR = 2;
 	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
@@ -281,9 +230,45 @@ void SystemClock_Config(void) {
 	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
 	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK) {
 		Error_Handler();
 	}
+}
+
+/**
+ * @brief SPI1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_SPI1_Init(void) {
+
+	/* USER CODE BEGIN SPI1_Init 0 */
+
+	/* USER CODE END SPI1_Init 0 */
+
+	/* USER CODE BEGIN SPI1_Init 1 */
+
+	/* USER CODE END SPI1_Init 1 */
+	/* SPI1 parameter configuration*/
+	hspi1.Instance = SPI1;
+	hspi1.Init.Mode = SPI_MODE_MASTER;
+	hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+	hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+	hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+	hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+	hspi1.Init.NSS = SPI_NSS_SOFT;
+	hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+	hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+	hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+	hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+	hspi1.Init.CRCPolynomial = 15;
+	if (HAL_SPI_Init(&hspi1) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN SPI1_Init 2 */
+
+	/* USER CODE END SPI1_Init 2 */
+
 }
 
 /**
@@ -332,20 +317,35 @@ static void MX_GPIO_Init(void) {
 	__HAL_RCC_GPIOB_CLK_ENABLE();
 
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(DW_NSS1_WAKEUP_GPIO_Port, DW_NSS1_WAKEUP_Pin,
+			GPIO_PIN_RESET);
 
-	/*Configure GPIO pin : B1_Pin */
-	GPIO_InitStruct.Pin = B1_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(DW_NSS_GPIO_Port, DW_NSS_Pin, GPIO_PIN_SET);
 
-	/*Configure GPIO pin : LD2_Pin */
-	GPIO_InitStruct.Pin = LD2_Pin;
+	/*Configure GPIO pin : DW_NSS1_WAKEUP_Pin */
+	GPIO_InitStruct.Pin = DW_NSS1_WAKEUP_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+	HAL_GPIO_Init(DW_NSS1_WAKEUP_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pins : DW_RESET_Pin DW_IRQn_Pin */
+	GPIO_InitStruct.Pin = DW_RESET_Pin | DW_IRQn_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : DW_NSS_Pin */
+	GPIO_InitStruct.Pin = DW_NSS_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_PULLUP;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+	HAL_GPIO_Init(DW_NSS_GPIO_Port, &GPIO_InitStruct);
+
+	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 }
 
@@ -360,7 +360,6 @@ static void MX_GPIO_Init(void) {
 void Error_Handler(void) {
 	/* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
-	__disable_irq();
 	while (1) {
 	}
 	/* USER CODE END Error_Handler_Debug */
@@ -377,8 +376,8 @@ void Error_Handler(void) {
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+    /* User can add his own implementation to report the file name and line number,
+       tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

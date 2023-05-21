@@ -7,13 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics.
-  * All rights reserved.</center></h2>
-  *
-  * This software component is licensed by ST under Ultimate Liberty license
-  * SLA0044, the "License"; You may not use this file except in compliance with
-  * the License. You may obtain a copy of the License at:
-  *                             www.st.com/SLA0044
+  * Always check user manual to adjust EEPROM_START_ADDRESS (always use the last flash sector)
   *
   ******************************************************************************
   */ 
@@ -26,6 +20,11 @@
 #include "stm32f4xx_hal.h"
 #include <stdio.h>
 
+/* My application definitions --------------------------------------------------------*/
+#define ADDR_ANCHOR_ID ((uint16_t)0x0001) // One page: 0x0000 to 0x7FFF
+
+
+
 /* Exported constants --------------------------------------------------------*/
 /* EEPROM emulation firmware error codes */
 #define EE_OK      (uint32_t)HAL_OK
@@ -34,16 +33,29 @@
 #define EE_TIMEOUT (uint32_t)HAL_TIMEOUT
 
 /* Define the size of the sectors to be used */
-#define PAGE_SIZE               (uint32_t)0x4000  /* Page size = 16KByte */
+#define PAGE_SIZE               (uint32_t)0x2000  /* Page size = 16KByte */
 
 /* Device voltage range supposed to be [2.7V to 3.6V], the operation will 
    be done by word  */
 #define VOLTAGE_RANGE           (uint8_t)VOLTAGE_RANGE_3
 
-/* EEPROM start address in Flash */
-#define EEPROM_START_ADDRESS  ((uint32_t)0x08008000) /* EEPROM emulation start address:
-                                                  from sector2 : after 16KByte of used 
-                                                  Flash memory */
+///* EEPROM start address in Flash */
+//#define EEPROM_START_ADDRESS  ((uint32_t)0x08008000) /* EEPROM emulation start address:
+//                                                  from sector2 : after 16KByte of used
+//                                                  Flash memory */
+
+/* HV: New EEPROM start address in Flash based on amount of flash occupied by the program*/
+// https://www.st.com/resource/en/reference_manual/rm0401-stm32f410-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+// Page 46
+#define EEPROM_START_ADDRESS  ((uint32_t)0x0801B000) /* EEPROM emulation start address: after 112KByte of used Flash memory */
+// Flash start address 	0x0800 0000
+// Flash end address   	0x0802 0000
+// Sector 2 address		0x0800 8000
+// Sector 4 address		0x0801 1000 to 0x0801 FFFF 64 KB
+// Each 4000 of the address corresponding to 16 kB (One page)
+// 4k: cal: 0x0801C000, worked: 0x0801B000
+// 2k: 0x0801E000
+// Problem: This address is inside sector 4 which is being used by the program. Thus it gets erased during flashing a new program.
 
 /* Pages 0 and 1 base and end addresses */
 #define PAGE0_BASE_ADDRESS    ((uint32_t)(EEPROM_START_ADDRESS + 0x0000))
