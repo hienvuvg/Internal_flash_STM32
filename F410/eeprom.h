@@ -33,7 +33,7 @@
 #define EE_TIMEOUT (uint32_t)HAL_TIMEOUT
 
 /* Define the size of the sectors to be used */
-#define PAGE_SIZE               (uint32_t)0x2000  /* Page size = 16KByte */
+#define PAGE_SIZE               (uint32_t)0x4000  /* Page size = 16KByte */
 
 /* Device voltage range supposed to be [2.7V to 3.6V], the operation will 
    be done by word  */
